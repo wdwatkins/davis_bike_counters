@@ -14,22 +14,25 @@ for(f in loyola_files) {
   #column names aren't consistent, but they do stay in the same order
   print(names(file_data))
   names(file_data) <- c("time", "total", "inbound", "outbound")
-  file_data_times <- file_data %>% 
-    #many different date formats here
-    mutate(time = ifelse(test = "POSIXct" %in% class(time),
-                         yes = time, 
-                         no = parse_date_time(time, orders = c("%b %d, %Y %I:%M %p",
-                                                                              "%Y-%m-%d %H:%M",
-                                                                              "%Y-%m-%d %H:%M:%S"),
-                                                         tz = "America/Los_Angeles")))
-  
+ 
+  if(!"POSIXct" %in% class(file_data$time)) {
+    file_data_times <- file_data %>% 
+      mutate(time = parse_date_time(time, 
+                                    orders = c("%b %d, %Y %I:%M %p",
+                                               "%Y-%m-%d %H:%M",
+                                               "%Y-%m-%d %H:%M:%S"),
+                                    tz = "America/Los_Angeles"))
+  } else {
+    file_data_times <- file_data %>% 
+      mutate(time = force_tz(time, 'America/Los_Angeles'))
+  }
   
   loyola_data <- bind_rows(loyola_data, file_data_times)
 }
-
-loyola_data <- mutate(loyola_data, time = as_datetime(time, tz = "America/Los_Angeles"))
 #double check that columns weren't switched
 assertthat::assert_that(all((loyola_data$inbound + loyola_data$outbound) == loyola_data$total))
+assertthat::assert_that(!anyDuplicated(loyola_data$time))
+
 
 ######### 3rd street data
 third_data <- tibble()
@@ -41,23 +44,19 @@ for(f in third_files) {
            eastbound = matches("Eastbound direction - South loops$"),
            total = contains("total")) %>% 
     rename_at(vars(contains("cyclist")), function(x) "westbound_cyclist") %>%
-    rename_at(vars(matches("Westbound direction - North loops$")), function(x) "westboud") %>% 
-    mutate_if((is.character(.) & (names(.) == "time")), 
-              parse_date_time, orders = c("%b %d, %Y %I:%M %p",
-                                                    "%Y-%m-%d %H:%M",
-                                                    "%Y-%m-%d %H:%M:%S"),
-                                   tz = "America/Los_Angeles")
-    # mutate(time = ifelse(test = "POSIXct" %in% class(time),
-                        
-    #                      yes = , #ifelse returns a value same shape as test result!
-                                   #so it only uses the first val of time
-    #                      no = "foo"))
-                          # no = parse_date_time(time, orders = c("%b %d, %Y %I:%M %p",
-                          #                                       "%Y-%m-%d %H:%M",
-                          #                                       "%Y-%m-%d %H:%M:%S"),
-                          #                      tz = "America/Los_Angeles")))
-
-  third_data <- bind_rows(third_data, file_data)
+    rename_at(vars(matches("Westbound direction - North loops$")), function(x) "westbound")  
+    if(!"POSIXct" %in% class(file_data$time)) {
+      file_data_times <- file_data %>% 
+        mutate(time = parse_date_time(time, 
+                                      orders = c("%b %d, %Y %I:%M %p",
+                                                  "%Y-%m-%d %H:%M",
+                                                  "%Y-%m-%d %H:%M:%S"),
+               tz = "America/Los_Angeles"))
+    } else {
+      file_data_times <- file_data %>% 
+        mutate(time = force_tz(time, 'America/Los_Angeles'))
+    }
+  third_data <- bind_rows(third_data, file_data_times)
   print(names(file_data))
-}  #TODO: why are times coming out all the same???
-third_data <- mutate(third_data, time = as_datetime(time, tz = "America/Los_Angeles"))
+}  
+assertthat::assert_that(!anyDuplicated(third_data$time))
